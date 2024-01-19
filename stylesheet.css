@@ -1,0 +1,15 @@
+.cdt-text { font-size: 1.2em; }
+
+.notifyIcon {
+    background-image: url("img/ip.svg");
+    background-size: 17px;
+    height: 17px;
+    background-position: 0px 8px;
+    text-align: right;
+    padding-left:25px;
+}
+
+.mapMenuItem {
+  background-size: contain;
+  height: 100px;
+}
