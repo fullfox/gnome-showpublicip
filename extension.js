@@ -204,6 +204,7 @@ export default class IpOnTaskbarExtension extends Extension {
 
   enable() {
     this.disabled = false;
+    IPdata.IP = "???";
 
     // Initialize icon once to prevent unnecessary reloading, unload in disable.
     popup_icon = getIcon("/img/ip.svg");
