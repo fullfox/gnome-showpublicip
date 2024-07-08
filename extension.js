@@ -48,13 +48,13 @@ const networkEventRefreshTimeout = 4;
 
 
 let IPdata = {
- "IP": "???",
+ "IP": null,
  "latitude": 0,
  "longitude": 0,
- "country": "???",
+ "country": null,
  "countryCode": "unknown", // unknown.svg
- "city": "???",
- "org": "???"
+ "city": null,
+ "org": null
 };
 
 const Indicator = GObject.registerClass(
@@ -145,26 +145,32 @@ function httpRequest(url, type = 'GET', callback) {
 
 // Create GNOME Notification
 let popup_icon = null;
-let notification_msg_sources = new Set(); // stores IDs of previously displayed notifications (for providing a handle to destruction)
+let notificationSource = null;
+function getNotificationSource() {
+    if (!notificationSource) {
+        notificationSource = new MessageTray.Source({
+            title: _('Show Public IP'),
+            icon: popup_icon,
+            policy: new MessageTray.NotificationGenericPolicy(),
+        });
+
+        // Reset the notification source if it's destroyed
+        notificationSource.connect('destroy', _source => {
+            notificationSource = null;
+        });
+        Main.messageTray.add(notificationSource);
+    }
+    return notificationSource;
+}
+
 function notify(title, msg) {
-  let source = new MessageTray.Source(title, "img/ip.svg");
-
-  notification_msg_sources.add(source);
-
-  //ensure notification is added to GNOME message tray
-  Main.messageTray.add(source);
-
-  let notification = new MessageTray.Notification(source, title, msg, {
-    bannerMarkup: true,
-    gicon: popup_icon
+  const source = getNotificationSource();
+  const notification = new MessageTray.Notification({
+      source: source,
+      title: title,
+      body: msg,
   });
-
-  //set to destroy messages in stack also
-  notification.connect('destroy', (destroyed_source) => {
-    notification_msg_sources.delete(destroyed_source.source);
-  });
-
-  source.showNotification(notification);
+  source.addNotification(notification);
 }
 
 
@@ -179,12 +185,8 @@ function getIcon(filepath) {
 
 
 
-
-
-
-
 let currentInstance;
-export default class IpOnTaskbarExtension extends Extension {
+export default class ShowPublicIP extends Extension {
 
   constructor(metadata) {
     super(metadata);
@@ -273,7 +275,7 @@ export default class IpOnTaskbarExtension extends Extension {
     //let t = new Date().getTime();
     //if (t - this.lastCheck <= minTimeBetweenChecks * 1000) return;
     //this.lastCheck = t;
-    console.log("\n\nFetching...\n\n");
+    console.log("Fetching...");
 
     httpRequest(extIpService, "GET", (_httpSession, result) => {
       try {
@@ -300,11 +302,11 @@ export default class IpOnTaskbarExtension extends Extension {
         };
 
         if(IPhasChanged){
-          console.log("\n\nIP has changed.\n\n")
+          notify('External IP Address', 'Has been changed to ' + IPdata.IP);
           currentInstance.updateIP();
 
           //Fetch map
-          console.log("\n\nFetching map\n\n");
+          console.log("Fetching map");
           let url_map = extIpServiceStaticMap + "?lat=" + IPdata.latitude + "&lon=" + IPdata.longitude + "&f=SVG&marker=12&w=250&h=150";
           httpRequest(url_map, "GET", (_httpSession, result) => {
             let bytes = _httpSession.send_and_read_finish(result);
@@ -313,7 +315,7 @@ export default class IpOnTaskbarExtension extends Extension {
           });
 
           //Fetch flag
-          console.log("\n\nFetching flag\n\n");
+          console.log("Fetching flag");
           let url_flag = extCountryFlagService.replace("<countrycode>", IPdata.countryCode.toLowerCase());
           httpRequest(url_flag, "GET", (_httpSession, result) => {
             let bytes = _httpSession.send_and_read_finish(result);
@@ -324,18 +326,14 @@ export default class IpOnTaskbarExtension extends Extension {
         }
 
       } catch (e) {
-        console.log("\n\nFailed Fetching\n\n");
+        console.log("Failed Fetching");
         console.log(e);
         return;
       }
     });
-
-
   }
 
   updateIP() {
-    notify('External IP Address', 'Has been changed to ' + IPdata.IP);
-
     if (this.panelButton != null) {
       this.panelButton.update();
     }

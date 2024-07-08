@@ -3,6 +3,6 @@
   "description": "Display public IP on taskbar",
   "uuid": "showpublicip@example.com",
   "shell-version": [
-    "45"
+    "45", "46"
   ]
 }
