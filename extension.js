@@ -91,14 +91,12 @@ const Indicator = GObject.registerClass(
       };
 
 
-      let copyBtn = new PopupMenu.PopupImageMenuItem(_(IPdata.IP), getIcon("/img/ip_ed.svg"), {
-        style_class: 'ipMenuItem'
-      });
+      let copyBtn = new PopupMenu.PopupImageMenuItem(_(IPdata.IP), getIcon("/img/ip_ed.svg"), {});
       copyBtn.connect('activate', copyTextFunction);
       obj.menu.addMenuItem(copyBtn);
 
 
-      let orgBtn = new PopupMenu.PopupImageMenuItem(_(IPdata.org), getIcon("/img/company.svg"), {});
+      let orgBtn = new PopupMenu.PopupImageMenuItem(_(IPdata.org ?? ""), getIcon("/img/company.svg"), {});
       orgBtn.connect('activate', copyTextFunction);
       obj.menu.addMenuItem(orgBtn);
 
@@ -123,6 +121,7 @@ const Indicator = GObject.registerClass(
 
       obj.menu.addMenuItem(mapImageBtn);
       obj.menu.toggle();
+      if (currentInstance) currentInstance.fetchData();
     }
 
 });
@@ -164,6 +163,7 @@ function getNotificationSource() {
 }
 
 function notify(title, msg) {
+  console.log("\n\nNotify!\n\n");
   const source = getNotificationSource();
   const notification = new MessageTray.Notification({
       source: source,
@@ -185,7 +185,7 @@ function getIcon(filepath) {
 
 
 
-let currentInstance;
+let currentInstance = null;
 export default class ShowPublicIP extends Extension {
 
   constructor(metadata) {
@@ -275,7 +275,7 @@ export default class ShowPublicIP extends Extension {
     //let t = new Date().getTime();
     //if (t - this.lastCheck <= minTimeBetweenChecks * 1000) return;
     //this.lastCheck = t;
-    console.log("Fetching...");
+    console.log("\n\nFetching...\n\n");
 
     httpRequest(extIpService, "GET", (_httpSession, result) => {
       try {
@@ -284,6 +284,7 @@ export default class ShowPublicIP extends Extension {
         let data = JSON.parse(res);
 
         let IPhasChanged = (IPdata.IP != data.ip);
+        if (IPhasChanged) console.log(data.ip);
 
         let lat = 0; let lon = 0;
         if(data.loc != null && data.loc.split(',').length == 2){
@@ -302,11 +303,11 @@ export default class ShowPublicIP extends Extension {
         };
 
         if(IPhasChanged){
-          notify('External IP Address', 'Has been changed to ' + IPdata.IP);
+          notify('Public IP Address has been changed to ' + IPdata.IP, '');
           currentInstance.updateIP();
 
           //Fetch map
-          console.log("Fetching map");
+          console.log("\n\nFetching map\n\n");
           let url_map = extIpServiceStaticMap + "?lat=" + IPdata.latitude + "&lon=" + IPdata.longitude + "&f=SVG&marker=12&w=250&h=150";
           httpRequest(url_map, "GET", (_httpSession, result) => {
             let bytes = _httpSession.send_and_read_finish(result);
@@ -315,7 +316,7 @@ export default class ShowPublicIP extends Extension {
           });
 
           //Fetch flag
-          console.log("Fetching flag");
+          console.log("\n\nFetching flag\n\n");
           let url_flag = extCountryFlagService.replace("<countrycode>", IPdata.countryCode.toLowerCase());
           httpRequest(url_flag, "GET", (_httpSession, result) => {
             let bytes = _httpSession.send_and_read_finish(result);
@@ -326,7 +327,11 @@ export default class ShowPublicIP extends Extension {
         }
 
       } catch (e) {
-        console.log("Failed Fetching");
+        IPdata.IP = "No Internet";
+        IPdata.countryCode = "unknown";
+        IPdata.org = "404" ;
+        currentInstance.updateIP();
+        console.log("\n\nFailed Fetching\n\n");
         console.log(e);
         return;
       }
@@ -342,8 +347,8 @@ export default class ShowPublicIP extends Extension {
 
   networkMonitorEnable() {
     // Enable network event monitoring
-    this.network_monitor = Gio.network_monitor_get_default();
-    this.network_monitor_connection = this.network_monitor.connect('network-changed', this._onNetworkStatusChanged);
+    this.network_monitor = Gio.NetworkMonitor.get_default();
+    this.network_monitor_connection = this.network_monitor.connect('network-changed', this._onNetworkStatusChanged.bind(this));
   }
 
 
@@ -382,7 +387,6 @@ export default class ShowPublicIP extends Extension {
         backFromSleep = true;
       }
       this.isIdle = false;
-
       this.networkMonitorEnable();
     }
 
@@ -399,9 +403,7 @@ export default class ShowPublicIP extends Extension {
   _onNetworkStatusChanged(status = null) {
     if (status != null && !this.isIdle) {
       if (status.get_network_available()) {
-        this.networkEventRefreshLoopID = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, networkEventRefreshTimeout, function() {
-          this.fetchData();
-        });
+        this.networkEventRefreshLoopID = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, networkEventRefreshTimeout, this.fetchData.bind(this));
       }
     }
   }
