@@ -241,12 +241,6 @@ export default class ShowPublicIP extends Extension {
   disable() {
     // Set to true so if the timer hits, stop.
     this.disabled = true;
-
-    // clear messagetray - and any associated remaining sources
-    for (let source of notification_msg_sources) {
-      source.destroy();
-    }
-
     popup_icon = null;
     this.messageTray = null;
 
